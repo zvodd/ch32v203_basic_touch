@@ -6,9 +6,9 @@
 #define LED_GPIO_PIN GPIO_Pin_15
 #define LED_CLOCK_ENABLE RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA, ENABLE)
 
-// TouchKey Configuration - Common pins that support TouchKey on CH32V203
+// TouchKey Configuration
 #define TOUCH_PIN_ADC_CHANNEL ADC_Channel_0  // PA0 (ADC Channel 0)
-#define TOUCH_THRESHOLD 50  // Adjust this value based on sensitivity needed
+#define TOUCH_THRESHOLD 100
 
 void NMI_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void HardFault_Handler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
@@ -64,8 +64,8 @@ void TouchKey_Init(void) {
     ADC_StartCalibration(ADC1);
     while(ADC_GetCalibrationStatus(ADC1));
     
-    // Enable TouchKey mode - this is the key for capacitive sensing
-    ADC_BufferCmd(ADC1, DISABLE);  // Disable buffer for TouchKey mode
+    // Enable TouchKey mode - disable buffer for capacitive sensing
+    ADC_BufferCmd(ADC1, DISABLE);
     
     printf("TouchKey initialized on PA0\r\n");
 }
@@ -81,14 +81,24 @@ uint16_t TouchKey_Read(void) {
     return ADC_GetConversionValue(ADC1);
 }
 
+// The CH32V SDK provides built-in debug UART functionality
+// Just need to call USART_Printf_Init() to enable it
+
 int main(void)
 {
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
     SystemCoreClockUpdate();
     Delay_Init();
     
-    printf("CH32V203 TouchKey LED Control Demo\r\n");
-    printf("Touch PA0 to toggle the LED on PA15\r\n");
+    // Initialize the SDK's built-in debug UART (PA9=TX @ 115200 baud)
+    USART_Printf_Init(115200);
+    
+    // Small delay to let UART settle
+    Delay_Ms(100);
+    
+    printf("\r\n=== CH32V203 TouchKey LED Control Demo ===\r\n");
+    printf("Debug output via USART1 (PA9=TX, PA10=RX) @ 115200 baud\r\n");
+    printf("Touch PA0 to toggle the LED on PA15\r\n\r\n");
     
     LED_Init();
     TouchKey_Init();
@@ -109,7 +119,10 @@ int main(void)
     baseline = baseline_sum / 10;
     printf("Baseline value: %d\r\n", baseline);
     printf("Touch threshold: %d\r\n", TOUCH_THRESHOLD);
+    printf("Touch range: %d to %d\r\n", baseline - TOUCH_THRESHOLD, baseline + TOUCH_THRESHOLD);
     printf("Ready! Touch PA0 to control LED\r\n\r\n");
+    
+    uint32_t debug_counter = 0;
     
     while (1)
     {
@@ -127,11 +140,20 @@ int main(void)
             led_state ^= 1;  // Toggle LED state
             GPIO_WriteBit(LED_GPIO_PORT, LED_GPIO_PIN, led_state);
             
-            printf("Touch detected! Value: %d, LED: %s\r\n", 
-                   touch_value, led_state ? "ON" : "OFF");
+            printf("TOUCH! Value: %d (diff: %d), LED: %s\r\n", 
+                   touch_value, 
+                   touch_value - baseline,
+                   led_state ? "ON" : "OFF");
+        }
+        
+        // Print debug info every 2 seconds if no touch
+        if(debug_counter % 40 == 0 && !touch_detected) {
+            printf("Current: %d, Baseline: %d, Diff: %d, LED: %s\r\n",
+                   touch_value, baseline, touch_value - baseline, led_state ? "ON" : "OFF");
         }
         
         last_touch_state = touch_detected;
+        debug_counter++;
         
         Delay_Ms(50);  // Small delay for debouncing and to avoid flooding serial
     }
