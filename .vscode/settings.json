@@ -1,5 +1,11 @@
 {
     "files.associations": {
-        "ch32v20x.h": "c"
+        "ch32v20x.h": "c",
+        "ch32v20x_usbfs_device.h": "c",
+        "ch32v20x_usb.h": "c",
+        "usb_desc.h": "c",
+        "string.h": "c",
+        "uart.h": "c",
+        "ch32v20x_conf.h": "c"
     }
 }
